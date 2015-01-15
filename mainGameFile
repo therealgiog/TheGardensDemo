@@ -1,0 +1,1822 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Audio;
+using Microsoft.Xna.Framework.Content;
+using Microsoft.Xna.Framework.GamerServices;
+using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
+using Microsoft.Xna.Framework.Media;
+
+namespace TheGardens
+{
+    #region Game Class
+    /// <summary>
+    /// This is the main type for your game
+    /// </summary>
+    public class Game1 : Microsoft.Xna.Framework.Game
+    {
+        GraphicsDeviceManager graphics;
+        SpriteBatch spriteBatch;
+        string currentAction = "waiting";
+        string moveDirection;
+        Input currentInput = new Input();
+        Room room = new Room();
+        string currentRoom;
+        bool isAudioPlaying = false;
+        int audioCount = 0;//a check to see if any audio files are playing
+        SpriteFont spriteFont;
+        List<SoundEffect> soundEffects = new List<SoundEffect>();
+        List<SoundEffectInstance> soundEffectInstances = new List<SoundEffectInstance>();
+        enum ScreenState { Title, Game };
+        ScreenState screenstate = ScreenState.Title;//defaults to title screen
+        bool enterKeyPressed = false;
+
+        public Game1()
+        {
+            graphics = new GraphicsDeviceManager(this);
+            Content.RootDirectory = "Content";
+        }
+
+        /// <summary>
+        /// Allows the game to perform any initialization it needs to before starting to run.
+        /// This is where it can query for any required services and load any non-graphic
+        /// related content.  Calling base.Initialize will enumerate through any components
+        /// and initialize them as well.
+        /// </summary>
+        protected override void Initialize()
+        {
+            currentRoom = room.InitializeFirstRoom();
+
+            base.Initialize();
+        }
+
+        /// <summary>
+        /// LoadContent will be called once per game and is the place to load
+        /// all of your content.
+        /// </summary>
+        protected override void LoadContent()
+        {
+            // Create a new SpriteBatch, which can be used to draw textures.
+            spriteBatch = new SpriteBatch(GraphicsDevice);
+            spriteFont = Content.Load<SpriteFont>("testText");
+            #region Audio Count
+            //this is the worst part of the code since I personally assign numbers to sounds files
+            soundEffects.Add(Content.Load<SoundEffect>("Gardens_room"));//sound 0
+            soundEffects.Add(Content.Load<SoundEffect>("Gardens2nd_Room"));//sound 1
+            soundEffects.Add(Content.Load<SoundEffect>("Gardens_DemoSign"));//sound 2
+            soundEffects.Add(Content.Load<SoundEffect>("Patio_room"));//sound 3
+            soundEffects.Add(Content.Load<SoundEffect>("BackEntry_Room"));//sound 4
+            soundEffects.Add(Content.Load<SoundEffect>("DomicileAccess_Room"));//sound 5
+            soundEffects.Add(Content.Load<SoundEffect>("MasterBedroom_Room"));//sound 6
+            soundEffects.Add(Content.Load<SoundEffect>("StatueHall_Room"));//sound 7
+            soundEffects.Add(Content.Load<SoundEffect>("Study_Room"));//sound 8
+            soundEffects.Add(Content.Load<SoundEffect>("News1_demo"));//sound 9
+            soundEffects.Add(Content.Load<SoundEffect>("Study_Note"));//sound 10
+
+            for (int sfx = 0; sfx <= soundEffects.Count - 1; sfx++)
+            {
+                soundEffectInstances.Add(soundEffects.ElementAt(sfx).CreateInstance());
+            }
+            room.LoadSounds(soundEffectInstances);
+            #endregion
+        }
+
+        /// <summary>
+        /// UnloadContent will be called once per game and is the place to unload
+        /// all content.
+        /// </summary>
+        protected override void UnloadContent()
+        {
+        }
+
+        /// <summary>
+        /// Allows the game to run logic such as updating the world,
+        /// checking for collisions, gathering input, and playing audio.
+        /// </summary>
+        /// <param name="gameTime">Provides a snapshot of timing values.</param>
+        protected override void Update(GameTime gameTime)
+        {
+            // Allows the game to exit
+            if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed)
+                this.Exit();
+
+            if (screenstate == ScreenState.Title)//if on title screen, check to see if enter was hit and then start game
+            {
+                enterKeyPressed = currentInput.IsEnterPressed();
+                if (enterKeyPressed)
+                {
+                    screenstate = ScreenState.Game;
+                }
+                else
+                {
+                    screenstate = ScreenState.Title;
+                }
+            }
+            else if (screenstate == ScreenState.Game)//if game has started
+            {
+                //check to see if audio is playing. if so, player can't move or do actions until audio is completed as checked in the next 'if' block
+                isAudioPlaying = room.IsAudioPlaying();
+                if (isAudioPlaying)
+                {
+                    audioCount = 0;
+                    for (int i = 0; i <= soundEffectInstances.Count - 1; i++)
+                    {
+                        if (soundEffectInstances.ElementAt(i).State == SoundState.Playing)
+                        {
+                            isAudioPlaying = true;
+                            audioCount++;
+                        }
+                        else if (audioCount == 0)
+                        {
+                            isAudioPlaying = false;
+                        }
+                    }
+                }
+
+                //not entirely sure if I should be checking for room movement or player action first
+                //probably won't make a big difference initially
+                if (!isAudioPlaying)
+                {
+                    currentAction = currentInput.GetAction();
+                    //don't change rooms if you are already performing an action in a room
+                    if (currentAction != "waiting")
+                    {
+                        room.PerformAction(currentAction);
+                    }
+                    else if (currentAction == "waiting")
+                    {
+                        moveDirection = currentInput.GetDirection();
+                    }
+                    else //safe check: the program should never reach this else condition
+                    {
+                        currentAction = "waiting";
+                        moveDirection = null;
+                    }
+                }
+            }
+            currentRoom = room.UpdateCurrentRoom(moveDirection);
+
+            base.Update(gameTime);
+        }
+
+        /// <summary>
+        /// This is called when the game should draw itself.
+        /// </summary>
+        /// <param name="gameTime">Provides a snapshot of timing values.</param>
+        protected override void Draw(GameTime gameTime)
+        {
+            GraphicsDevice.Clear(Color.CornflowerBlue);
+
+            spriteBatch.Begin();
+
+            if (screenstate == ScreenState.Title)
+            {
+                spriteBatch.DrawString(spriteFont, "The Gardens", new Vector2(300, 50), Color.White);
+                spriteBatch.DrawString(spriteFont, "demo", new Vector2(350, 80), Color.Black);
+                spriteBatch.DrawString(spriteFont, "by", new Vector2(300, 150), Color.Black);
+                spriteBatch.DrawString(spriteFont, "Giovanni Gonzales\nEvan Prichard", new Vector2(300, 180), Color.White);
+                spriteBatch.DrawString(spriteFont, "Enter = Start", new Vector2(300, 300), Color.White);
+                spriteBatch.DrawString(spriteFont, "D = Room Description\nC = Check Area\nN = Examine Note\nK = Pick Up Key", new Vector2(300, 350), Color.Black);
+            }
+            else if (screenstate == ScreenState.Game)
+            {
+                spriteBatch.DrawString(spriteFont, room.currentRoom, room.currentRoomDisplay.onScreenCurrentRoom, Color.Black);
+                spriteBatch.DrawString(spriteFont, room.currentRoomDisplay.northText, room.currentRoomDisplay.onScreenNorth, Color.White);
+                spriteBatch.DrawString(spriteFont, room.currentRoomDisplay.southText, room.currentRoomDisplay.onScreenSouth, Color.White);
+                spriteBatch.DrawString(spriteFont, room.currentRoomDisplay.eastText, room.currentRoomDisplay.onScreenEast, Color.White);
+                spriteBatch.DrawString(spriteFont, room.currentRoomDisplay.westText, room.currentRoomDisplay.onScreenWest, Color.White);
+                spriteBatch.DrawString(spriteFont, "D = Description\nC = Check\nN = Note\nK = Key", new Vector2(50, 50), Color.Black);
+            }
+            spriteBatch.End();
+
+            base.Draw(gameTime);
+        }
+    }
+    #endregion
+
+    #region Direction and Action (Input) Class
+    public class Input
+    {
+        KeyboardState keyboradState;
+        string north = "north";
+        string south = "south";
+        string east = "east";
+        string west = "west";
+        string currentAction;
+        bool keyUp = true;
+
+        public string GetDirection()
+        {
+            keyboradState = Keyboard.GetState();
+            if (keyUp)
+            {
+                if (keyboradState.IsKeyDown(Keys.Up))
+                {
+                    keyUp = false;
+                    return north;
+                }
+                else if (keyboradState.IsKeyDown(Keys.Down))
+                {
+                    keyUp = false;
+                    return south;
+                }
+                else if (keyboradState.IsKeyDown(Keys.Right))
+                {
+                    keyUp = false;
+                    return east;
+                }
+                else if (keyboradState.IsKeyDown(Keys.Left))
+                {
+                    keyUp = false;
+                    return west;
+                }
+                else
+                {
+                    return null;
+                }
+            }
+            else
+            {
+                CheckKeysStates();
+                return null;//return no movement
+            }
+        }
+
+        public string GetAction()
+        {
+            keyboradState = Keyboard.GetState();
+            if (keyUp)
+            {
+                if (keyboradState.IsKeyDown(Keys.D))
+                {
+                    keyUp = false;
+                    currentAction = "description";
+                    return currentAction;
+                }
+                else if (keyboradState.IsKeyDown(Keys.N))
+                {
+                    keyUp = false;
+                    currentAction = "note";
+                    return currentAction;
+                }
+                else if (keyboradState.IsKeyDown(Keys.C))
+                {
+                    keyUp = false;
+                    currentAction = "check";
+                    return currentAction;
+                }
+                else if (keyboradState.IsKeyDown(Keys.K))
+                {
+                    keyUp = false;
+                    currentAction = "key";
+                    return currentAction;
+                }
+                else
+                {
+                    currentAction = "waiting";
+                    return currentAction;
+                }
+            }
+            else
+            {
+                CheckKeysStates();
+                currentAction = "waiting";
+                return currentAction;
+            }
+        }
+
+        public void CheckKeysStates()
+        {
+            if (keyboradState.IsKeyUp(Keys.D) && keyboradState.IsKeyUp(Keys.N) && keyboradState.IsKeyUp(Keys.C) && keyboradState.IsKeyUp(Keys.K) &&
+                keyboradState.IsKeyUp(Keys.Up) && keyboradState.IsKeyUp(Keys.Down) && keyboradState.IsKeyUp(Keys.Right) && keyboradState.IsKeyUp(Keys.Left))
+            {
+                keyUp = true;
+            }
+            else
+            {
+                keyUp = false;
+            }
+        }
+
+        public bool IsEnterPressed()
+        {
+            keyboradState = Keyboard.GetState();
+            if (keyboradState.IsKeyDown(Keys.Enter))
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+    }
+    #endregion
+
+    #region Room Class
+    public class Room
+    {
+        public string currentRoom;
+
+        #region Room Strings
+        string gardens = "Gardens";
+        string patio = "Patio";
+        string courtyard = "Courtyard";
+        string guestHouse = "Guest House";
+        string cellar = "Cellar";
+        string twinsRoom = "Twins Room";
+        string backEntry = "Back Entry";
+        string domicileAccess = "Domicile Access";
+        string masterBedroom = "Master Bedroom";
+        string statueHall = "Statue Hall";
+        string study = "Study";
+        string westWing = "West Wing";
+        string bathroom = "Bathroom";
+        string library = "Library";
+        string parlorRoom = "Parlor Room";
+        string mainHall = "Main Hall";
+        string foyer = "Foyer";
+        string fountain = "Fountain";
+        string breezeway = "Breezeway";
+        string kitchen = "Kitchen";
+        string diningRoom = "Dining Room";
+        string lowerCorridor = "Lower Corridor";
+        string laundryRoom = "Laundry Room";
+        string backHall = "Back Hall";
+        string couplesRoom = "Couples Room";
+        string washroom = "Washroom";
+        string upperCorridor = "Upper Corridor";
+        string conservatory = "Conservatory";
+        string eastWing = "East Wing";
+        string ballRoom = "Ball Room";
+        string utilityCorridor = "Utility Corridor";
+        string utilityRoom = "Utility Room";
+        string butlersChamber = "Butler's Chamber";
+        #endregion
+
+        public Display currentRoomDisplay = new Display();
+        bool audioPlaying = false;
+        int gValue = 0; //(gardens) game value: a number to keep track of that affects what players find and hear in rooms
+        bool acquiredStudyKey = false;
+        #region Room Visit Values
+        //used to keep track of number of visits to each individual room
+        int gardensVisitValue = 0;
+        int masterBedroomVisitValue = 0;
+        int studyVisitValue = 0;
+        #endregion
+        #region Room Audio Files
+        SoundEffectInstance gardensDescription1Audio;
+        SoundEffectInstance gardensDescription2Audio;
+        SoundEffectInstance gardensSignAudio;
+        SoundEffectInstance patioDescriptionAudio;
+        SoundEffectInstance backEntryDescriptionAudio;
+        SoundEffectInstance domicileAccessDescriptionAudio;
+        SoundEffectInstance masterBedroomDescriptionAudio;
+        SoundEffectInstance statueHallDescriptionAudio;
+        SoundEffectInstance studyDescriptionAudio;
+        SoundEffectInstance news1Audio;
+        SoundEffectInstance studyNoteAudio;
+        #endregion
+
+        public void LoadSounds(List<SoundEffectInstance> soundEffectInstances)
+        {
+            gardensDescription1Audio = soundEffectInstances.ElementAt(0);
+            gardensDescription2Audio = soundEffectInstances.ElementAt(1);
+            gardensSignAudio = soundEffectInstances.ElementAt(2);
+            patioDescriptionAudio = soundEffectInstances.ElementAt(3);
+            backEntryDescriptionAudio = soundEffectInstances.ElementAt(4);
+            domicileAccessDescriptionAudio = soundEffectInstances.ElementAt(5);
+            masterBedroomDescriptionAudio = soundEffectInstances.ElementAt(6);
+            statueHallDescriptionAudio = soundEffectInstances.ElementAt(7);
+            studyDescriptionAudio = soundEffectInstances.ElementAt(8);
+            news1Audio = soundEffectInstances.ElementAt(9);
+            studyNoteAudio = soundEffectInstances.ElementAt(10);
+        }
+
+        public string InitializeFirstRoom()
+        {
+            currentRoom = gardens;
+            return currentRoom;
+        }
+
+        #region Current Room Logic
+        //Not all 'if' and 'else if' statements are necessary, but will keep just in case changes need to be made to rooms.
+        public string UpdateCurrentRoom(string moveDirection)
+        {
+            #region Gardens
+            if (currentRoom == gardens)
+            {
+                if (gValue <= 1)
+                {
+                    if (moveDirection == "north")
+                    {
+                        currentRoom = gardens;
+                        return gardens;
+                    }
+                    else if (moveDirection == "south")
+                    {
+                        currentRoom = gardens;
+                        return gardens;
+                    }
+                    else if (moveDirection == "east")
+                    {
+                        currentRoom = gardens;
+                        return gardens;
+                    }
+                    else if (moveDirection == "west")
+                    {
+                        currentRoom = patio;
+                        return patio;
+                    }
+                    else
+                    {
+                        currentRoomDisplay.MoveDirectionTextOnScreen("High Wall", "Breezeway\n(locked window)", "Couples Room\n(door jammed)", patio);
+                        return gardens;
+                    }
+                }
+                else if (gValue == 2)
+                {
+                    if (moveDirection == "north")
+                    {
+                        currentRoom = gardens;
+                        return gardens;
+                    }
+                    else if (moveDirection == "south")
+                    {
+                        currentRoom = breezeway;
+                        return breezeway;
+                    }
+                    else if (moveDirection == "east")
+                    {
+                        currentRoom = couplesRoom;
+                        return couplesRoom;
+                    }
+                    else if (moveDirection == "west")
+                    {
+                        currentRoom = patio;
+                        return patio;
+                    }
+                    else
+                    {
+                        currentRoomDisplay.MoveDirectionTextOnScreen("High Wall", breezeway, couplesRoom, patio);
+                        return gardens;
+                    }
+                }
+                else
+                {
+                    gValue = 0;
+                    return gardens;
+                }
+            }
+            #endregion
+            #region Patio
+            else if (currentRoom == patio)
+            {
+                if (gValue <= 1)
+                {
+                    if (moveDirection == "north")
+                    {
+                        currentRoom = patio;
+                        return patio;
+                    }
+                    else if (moveDirection == "south")
+                    {
+                        currentRoom = backEntry;
+                        return backEntry;
+                    }
+                    else if (moveDirection == "east")
+                    {
+                        currentRoom = gardens;
+                        return gardens;
+                    }
+                    else if (moveDirection == "west")
+                    {
+                        currentRoom = patio;
+                        return patio;
+                    }
+                    else
+                    {
+                        currentRoomDisplay.MoveDirectionTextOnScreen("Courtyard\n(blocked off)", backEntry, gardens, "Twins Room\n(locked door)");
+                        return patio;
+                    }
+                }
+                else if (gValue == 2)
+                {
+                    if (moveDirection == "north")
+                    {
+                        currentRoom = courtyard;
+                        return courtyard;
+                    }
+                    else if (moveDirection == "south")
+                    {
+                        currentRoom = backEntry;
+                        return backEntry;
+                    }
+                    else if (moveDirection == "east")
+                    {
+                        currentRoom = gardens;
+                        return gardens;
+                    }
+                    else if (moveDirection == "west")
+                    {
+                        currentRoom = twinsRoom;
+                        return twinsRoom;
+                    }
+                    else
+                    {
+                        currentRoomDisplay.MoveDirectionTextOnScreen(courtyard, backEntry, gardens, twinsRoom);
+                        return patio;
+                    }
+                }
+                else
+                {
+                    gValue = 0;
+                    return patio;
+                }
+            }
+            #endregion
+            #region Courtyard
+            else if (currentRoom == courtyard)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = cellar;
+                    return cellar;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = patio;
+                    return patio;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = courtyard;
+                    return courtyard;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = guestHouse;
+                    return guestHouse;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen(cellar, patio, "High Wall", guestHouse);
+                    return courtyard;
+                }
+            }
+            #endregion
+            #region Guest House
+            else if (currentRoom == guestHouse)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = guestHouse;
+                    return guestHouse;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = guestHouse;
+                    return guestHouse;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = courtyard;
+                    return courtyard;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = guestHouse;
+                    return guestHouse;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen("Wall", "Wall", courtyard, "Wall");
+                    return guestHouse;
+                }
+            }
+            #endregion
+            #region Cellar
+            else if (currentRoom == cellar)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = cellar;
+                    return cellar;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = courtyard;
+                    return courtyard;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = cellar;
+                    return cellar;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = cellar;
+                    return cellar;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen("Wall", courtyard, "Wall", "Wall");
+                    return cellar;
+                }
+            }
+            #endregion
+            #region Twins Room
+            else if (currentRoom == twinsRoom)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = twinsRoom;
+                    return twinsRoom;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = domicileAccess;
+                    return domicileAccess;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = patio;
+                    return patio;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = twinsRoom;
+                    return twinsRoom;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen("Wall", domicileAccess, patio, "Wall");
+                    return twinsRoom;
+                }
+            }
+            #endregion
+            #region Back Entry
+            else if (currentRoom == backEntry)
+            {
+                if (gValue <= 1)
+                {
+                    if (moveDirection == "north")
+                    {
+                        currentRoom = patio;
+                        return patio;
+                    }
+                    else if (moveDirection == "south")
+                    {
+                        currentRoom = backEntry;
+                        return backEntry;
+                    }
+                    else if (moveDirection == "east")
+                    {
+                        currentRoom = backEntry;
+                        return backEntry;
+                    }
+                    else if (moveDirection == "west")
+                    {
+                        currentRoom = domicileAccess;
+                        return domicileAccess;
+                    }
+                    else
+                    {
+                        currentRoomDisplay.MoveDirectionTextOnScreen(patio, "Parlor Room\n(locked)", "Breezeway\n(blocked)", domicileAccess);
+                        return backEntry;
+                    }
+                }
+                else if (gValue == 2)
+                {
+                    if (moveDirection == "north")
+                    {
+                        currentRoom = patio;
+                        return patio;
+                    }
+                    else if (moveDirection == "south")
+                    {
+                        currentRoom = parlorRoom;
+                        return parlorRoom;
+                    }
+                    else if (moveDirection == "east")
+                    {
+                        currentRoom = breezeway;
+                        return breezeway;
+                    }
+                    else if (moveDirection == "west")
+                    {
+                        currentRoom = domicileAccess;
+                        return domicileAccess;
+                    }
+                    else
+                    {
+                        currentRoomDisplay.MoveDirectionTextOnScreen(patio, parlorRoom, breezeway, domicileAccess);
+                        return backEntry;
+                    }
+                }
+                else
+                {
+                    gValue = 0;
+                    return backEntry;
+                }
+            }
+            #endregion
+            #region Domicile Access
+            else if (currentRoom == domicileAccess)
+            {
+                if (gValue <= 1)
+                {
+                    if (moveDirection == "north")
+                    {
+                        currentRoom = domicileAccess;
+                        return domicileAccess;
+                    }
+                    else if (moveDirection == "south")
+                    {
+                        currentRoom = statueHall;
+                        return statueHall;
+                    }
+                    else if (moveDirection == "east")
+                    {
+                        currentRoom = backEntry;
+                        return backEntry;
+                    }
+                    else if (moveDirection == "west")
+                    {
+                        currentRoom = masterBedroom;
+                        return masterBedroom;
+                    }
+                    else
+                    {
+                        currentRoomDisplay.MoveDirectionTextOnScreen("Twins Room\n(locked)", statueHall, backEntry, masterBedroom);
+                        return domicileAccess;
+                    }
+                }
+                else if (gValue == 2)
+                {
+                    if (moveDirection == "north")
+                    {
+                        currentRoom = twinsRoom;
+                        return twinsRoom;
+                    }
+                    else if (moveDirection == "south")
+                    {
+                        currentRoom = statueHall;
+                        return statueHall;
+                    }
+                    else if (moveDirection == "east")
+                    {
+                        currentRoom = backEntry;
+                        return backEntry;
+                    }
+                    else if (moveDirection == "west")
+                    {
+                        currentRoom = masterBedroom;
+                        return masterBedroom;
+                    }
+                    else
+                    {
+                        currentRoomDisplay.MoveDirectionTextOnScreen(twinsRoom, statueHall, backEntry, masterBedroom);
+                        return domicileAccess;
+                    }
+                }
+                else
+                {
+                    gValue = 0;
+                    return domicileAccess;
+                }
+            }
+            #endregion
+            #region Master Bedroom
+            else if (currentRoom == masterBedroom)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = masterBedroom;
+                    return masterBedroom;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = masterBedroom;
+                    return masterBedroom;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = domicileAccess;
+                    return domicileAccess;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = masterBedroom;
+                    return masterBedroom;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen("Wall", "Wall", domicileAccess, "Wall");
+                    return masterBedroom;
+                }
+            }
+            #endregion
+            #region Statue Hall
+            else if (currentRoom == statueHall)
+            {
+                if (gValue <= 1)
+                {
+                    if (moveDirection == "north")
+                    {
+                        currentRoom = domicileAccess;
+                        return domicileAccess;
+                    }
+                    else if (moveDirection == "south")
+                    {
+                        currentRoom = statueHall;
+                        return statueHall;
+                    }
+                    else if (moveDirection == "east")
+                    {
+                        currentRoom = statueHall;
+                        return statueHall;
+                    }
+                    else if (moveDirection == "west")
+                    {
+                        if (acquiredStudyKey == false)
+                        {
+                            currentRoom = statueHall;
+                            return statueHall;
+                        }
+                        else
+                        {
+                            currentRoom = study;
+                            return study;
+                        }
+                    }
+                    else
+                    {
+                        if (acquiredStudyKey == false)
+                        {
+                            currentRoomDisplay.MoveDirectionTextOnScreen(domicileAccess, "West Wing\n(blocked)", "Parlor Room\n(locked)", "Study\n(locked)");
+                            return statueHall;
+                        }
+                        else
+                        {
+                            currentRoomDisplay.MoveDirectionTextOnScreen(domicileAccess, "West Wing\n(blocked)", "Parlor Room\n(locked)", study);
+                            return statueHall;
+                        }
+                    }
+                }
+                else if (gValue == 2)
+                {
+                    if (moveDirection == "north")
+                    {
+                        currentRoom = domicileAccess;
+                        return domicileAccess;
+                    }
+                    else if (moveDirection == "south")
+                    {
+                        currentRoom = westWing;
+                        return westWing;
+                    }
+                    else if (moveDirection == "east")
+                    {
+                        currentRoom = parlorRoom;
+                        return parlorRoom;
+                    }
+                    else if (moveDirection == "west")
+                    {
+                        currentRoom = study;
+                        return study;
+                    }
+                    else
+                    {
+                        currentRoomDisplay.MoveDirectionTextOnScreen(domicileAccess, westWing, parlorRoom, study);
+                        return statueHall;
+                    }
+                }
+                else
+                {
+                    gValue = 0;
+                    return statueHall;
+                }
+            }
+            #endregion
+                //initial room access at start of demo (except Courtyard, Guest House, Cellar, and Twins Room) 
+            #region Study
+            else if (currentRoom == study)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = study;
+                    return study;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = study;
+                    return study;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = statueHall;
+                    return statueHall;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = study;
+                    return study;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen("Wall", "Wall", statueHall, "Wall");
+                    return study;
+                }
+            }
+            #endregion
+                //additional room unlocked during demo
+                //all other rooms become accessable after demo completion
+            #region West Wing
+            else if (currentRoom == westWing)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = statueHall;
+                    return statueHall;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = library;
+                    return library;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = westWing;
+                    return westWing;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = bathroom;
+                    return bathroom;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen(statueHall, library, "Wall", bathroom);
+                    return westWing;
+                }
+            }
+            #endregion
+            #region Bathroom
+            else if (currentRoom == bathroom)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = bathroom;
+                    return bathroom;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = bathroom;
+                    return bathroom;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = westWing;
+                    return westWing;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = bathroom;
+                    return bathroom;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen("Wall", "Wall", westWing, "Wall");
+                    return bathroom;
+                }
+            }
+            #endregion
+            #region Library
+            else if (currentRoom == library)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = westWing;
+                    return westWing;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = library;
+                    return library;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = mainHall;
+                    return mainHall;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = library;
+                    return library;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen(westWing, "Wall", mainHall, "Wall");
+                    return library;
+                }
+            }
+            #endregion
+            #region Parlor Room
+            else if (currentRoom == parlorRoom)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = backEntry;
+                    return backEntry;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = mainHall;
+                    return mainHall;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = diningRoom;
+                    return diningRoom;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = statueHall;
+                    return statueHall;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen(backEntry, mainHall, diningRoom, statueHall);
+                    return parlorRoom;
+                }
+            }
+            #endregion
+            #region Main Hall
+            else if (currentRoom == mainHall)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = parlorRoom;
+                    return parlorRoom;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = foyer;
+                    return foyer;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = lowerCorridor;
+                    return lowerCorridor;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = library;
+                    return library;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen(parlorRoom, foyer, lowerCorridor, library);
+                    return mainHall;
+                }
+            }
+            #endregion
+            #region Foyer
+            else if (currentRoom == foyer)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = mainHall;
+                    return mainHall;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = fountain;
+                    return fountain;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = laundryRoom;
+                    return laundryRoom;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = foyer;
+                    return foyer;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen(mainHall, fountain, laundryRoom, "Wall");
+                    return foyer;
+                }
+            }
+            #endregion
+            #region Fountain
+            else if (currentRoom == fountain)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = foyer;
+                    return foyer;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = fountain;
+                    return fountain;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = fountain;
+                    return fountain;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = fountain;
+                    return fountain;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen(foyer, "Front Gate\nEntrance", "High Wall", "High Wall");
+                    return fountain;
+                }
+            }
+            #endregion
+            #region Breezeway
+            else if (currentRoom == breezeway)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = gardens;
+                    return gardens;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = kitchen;
+                    return kitchen;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = backHall;
+                    return backHall;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = backEntry;
+                    return backEntry;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen(gardens, kitchen, backHall, backEntry);
+                    return breezeway;
+                }
+            }
+            #endregion
+            #region Kitchen
+            else if (currentRoom == kitchen)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = breezeway;
+                    return breezeway;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = diningRoom;
+                    return diningRoom;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = upperCorridor;
+                    return upperCorridor;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = kitchen;
+                    return kitchen;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen(breezeway, diningRoom, upperCorridor, "Wall");
+                    return kitchen;
+                }
+            }
+            #endregion
+            #region Dining Room
+            else if (currentRoom == diningRoom)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = kitchen;
+                    return kitchen;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = lowerCorridor;
+                    return lowerCorridor;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = eastWing;
+                    return eastWing;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = parlorRoom;
+                    return parlorRoom;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen(kitchen, lowerCorridor, eastWing, parlorRoom);
+                    return diningRoom;
+                }
+            }
+            #endregion
+            #region Lower Corridor
+            else if (currentRoom == lowerCorridor)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = diningRoom;
+                    return diningRoom;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = laundryRoom;
+                    return laundryRoom;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = utilityCorridor;
+                    return utilityCorridor;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = mainHall;
+                    return mainHall;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen(diningRoom, laundryRoom, utilityCorridor, mainHall);
+                    return lowerCorridor;
+                }
+            }
+            #endregion
+            #region Laundry Room
+            else if (currentRoom == laundryRoom)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = lowerCorridor;
+                    return lowerCorridor;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = laundryRoom;
+                    return laundryRoom;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = laundryRoom;
+                    return laundryRoom;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = laundryRoom;
+                    return laundryRoom;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen(lowerCorridor, "Wall", "Wall", "Wall");
+                    return laundryRoom;
+                }
+            }
+            #endregion
+            #region Back Hall
+            else if (currentRoom == backHall)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = couplesRoom;
+                    return couplesRoom;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = upperCorridor;
+                    return upperCorridor;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = washroom;
+                    return washroom;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = breezeway;
+                    return breezeway;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen(couplesRoom, upperCorridor, washroom, breezeway);
+                    return backHall;
+                }
+            }
+            #endregion
+            #region Couples Room
+            else if (currentRoom == couplesRoom)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = couplesRoom;
+                    return couplesRoom;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = backHall;
+                    return backHall;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = couplesRoom;
+                    return couplesRoom;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = gardens;
+                    return gardens;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen("Wall", backHall, "Wall", gardens);
+                    return couplesRoom;
+                }
+            }
+            #endregion
+            #region Washroom
+            else if (currentRoom == washroom)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = washroom;
+                    return washroom;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = washroom;
+                    return washroom;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = washroom;
+                    return washroom;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = backHall;
+                    return backHall;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen("Wall", "Wall", "Wall", backHall);
+                    return washroom;
+                }
+            }
+            #endregion
+            #region Upper Corridor
+            else if (currentRoom == upperCorridor)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = backHall;
+                    return backHall;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = eastWing;
+                    return eastWing;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = conservatory;
+                    return conservatory;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = kitchen;
+                    return kitchen;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen(backHall, eastWing, conservatory, kitchen);
+                    return upperCorridor;
+                }
+            }
+            #endregion
+            #region Conservatory
+            else if (currentRoom == conservatory)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = conservatory;
+                    return conservatory;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = ballRoom;
+                    return ballRoom;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = conservatory;
+                    return conservatory;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = upperCorridor;
+                    return upperCorridor;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen("Wall", ballRoom, "Wall", upperCorridor);
+                    return conservatory;
+                }
+            }
+            #endregion
+            #region East Wing
+            else if (currentRoom == eastWing)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = upperCorridor;
+                    return upperCorridor;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = utilityCorridor;
+                    return utilityCorridor;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = ballRoom;
+                    return ballRoom;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = diningRoom;
+                    return diningRoom;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen(upperCorridor, utilityCorridor, ballRoom, diningRoom);
+                    return eastWing;
+                }
+            }
+            #endregion
+            #region Ball Room
+            else if (currentRoom == ballRoom)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = conservatory;
+                    return conservatory;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = ballRoom;
+                    return ballRoom;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = ballRoom;
+                    return ballRoom;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = eastWing;
+                    return eastWing;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen(conservatory, "Wall", "Wall", eastWing);
+                    return ballRoom;
+                }
+            }
+            #endregion
+            #region Utility Corridor
+            else if (currentRoom == utilityCorridor)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = eastWing;
+                    return eastWing;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = utilityCorridor;
+                    return utilityCorridor;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = utilityRoom;
+                    return utilityRoom;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = lowerCorridor;
+                    return lowerCorridor;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen(eastWing, "Wall", utilityRoom, lowerCorridor);
+                    return utilityCorridor;
+                }
+            }
+            #endregion
+            #region Utility Room
+            else if (currentRoom == utilityRoom)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = utilityRoom;
+                    return utilityRoom;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = utilityRoom;
+                    return utilityRoom;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = butlersChamber;
+                    return butlersChamber;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = utilityCorridor;
+                    return utilityCorridor;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen("Wall", "Wall", butlersChamber, utilityCorridor);
+                    return utilityRoom;
+                }
+            }
+            #endregion
+            #region Butler's Chamber
+            else if (currentRoom == butlersChamber)
+            {
+                if (moveDirection == "north")
+                {
+                    currentRoom = butlersChamber;
+                    return butlersChamber;
+                }
+                else if (moveDirection == "south")
+                {
+                    currentRoom = butlersChamber;
+                    return butlersChamber;
+                }
+                else if (moveDirection == "east")
+                {
+                    currentRoom = butlersChamber;
+                    return butlersChamber;
+                }
+                else if (moveDirection == "west")
+                {
+                    currentRoom = utilityRoom;
+                    return utilityRoom;
+                }
+                else
+                {
+                    currentRoomDisplay.MoveDirectionTextOnScreen("Wall", "Wall", "Wall", utilityRoom);
+                    return butlersChamber;
+                }
+            }
+            #endregion
+            else
+            {
+                return currentRoom;
+            }
+        }
+        #endregion
+
+        #region Room Actions
+        public void PerformAction(string currentAction)
+        {
+            //only adding actions for rooms in demo
+            //addition actions for additional rooms can be added later if demo gets expanded on
+            #region Gardens
+            if (currentRoom == gardens)
+            {
+                if (gValue == 0)//starting the game
+                {
+                    if (currentAction == "description")
+                    {
+                        gardensVisitValue = 1;
+                        gardensDescription1Audio.Play();                        
+                        audioPlaying = true;
+                    }
+                }
+                else if (gValue <= 2)
+                {
+                    if (gardensVisitValue <= 2)
+                    {
+                        if (currentAction == "description")
+                        {
+                            gardensVisitValue = 2;
+                            gardensDescription2Audio.Play();
+                            audioPlaying = true;
+                        }
+                        else if (gardensVisitValue == 2 && currentAction == "check")
+                        {
+                            gValue = 2;
+                            gardensSignAudio.Play();
+                            audioPlaying = true;                            
+                        }
+                    }
+                }
+            }
+            #endregion
+            #region Patio
+            else if (currentRoom == patio)
+            {
+                if (gValue <= 2)
+                {
+                    if (currentAction == "description")
+                    {
+                        patioDescriptionAudio.Play();
+                        audioPlaying = true;
+                    }
+                }
+            }
+            #endregion
+            #region Courtyard
+            else if (currentRoom == courtyard)
+            {
+                //no audio yet
+            }
+            #endregion
+            #region Guest House
+            else if (currentRoom == guestHouse)
+            {
+                //no audio yet
+            }
+            #endregion
+            #region Cellar
+            else if (currentRoom == cellar)
+            {
+                //no audio yet
+            }
+            #endregion
+            #region Twins Room
+            else if (currentRoom == twinsRoom)
+            {
+                //no audio yet
+            }
+            #endregion
+            #region Back Entry
+            else if (currentRoom == backEntry)
+            {
+                if (gValue <= 2)
+                {
+                    if (currentAction == "description")
+                    {
+                        backEntryDescriptionAudio.Play();
+                        audioPlaying = true;
+                    }
+                }
+            }
+            #endregion
+            #region Domicile Access
+            else if (currentRoom == domicileAccess)
+            {
+                if (gValue <= 2)
+                {
+                    if (currentAction == "description")
+                    {
+                        domicileAccessDescriptionAudio.Play();
+                        audioPlaying = true;
+                    }
+                }
+            }
+            #endregion
+            #region Master Bedroom
+            else if (currentRoom == masterBedroom)
+            {
+                if (masterBedroomVisitValue <= 1)
+                {
+                    if (currentAction == "description")
+                    {
+                        masterBedroomDescriptionAudio.Play();
+                        masterBedroomVisitValue = 1;
+                        audioPlaying = true;
+                    }
+                    else if (masterBedroomVisitValue == 1 && currentAction == "key")
+                    {
+                        //NEED TEXT FEEDBACK FOR ACQUIRING KEY
+                        acquiredStudyKey = true;
+                    }
+                }
+            }
+            #endregion
+            #region Statue Hall
+            else if (currentRoom == statueHall)
+            {
+                if (currentAction == "description")
+                {
+                    statueHallDescriptionAudio.Play();
+                    audioPlaying = true;
+                }
+            }
+            #endregion
+            #region Study
+            else if (currentRoom == study)
+            {
+                if (studyVisitValue <= 1)
+                {
+                    if (currentAction == "description")
+                    {
+                        studyVisitValue = 1;
+                        studyDescriptionAudio.Play();
+                        audioPlaying = true;
+                    }
+                    else if (studyVisitValue == 1 && currentAction == "check")
+                    {
+                        news1Audio.Play();
+                        audioPlaying = true;
+                    }
+                    else if (studyVisitValue == 1 && currentAction == "note")
+                    {
+                        gValue = 1;
+                        studyNoteAudio.Play();
+                        audioPlaying = true;
+                    }
+                }
+            }
+            #endregion
+            else
+            {
+                //reset game
+                audioPlaying = false;
+                gValue = 0;
+                currentRoom = gardens;
+                gardensVisitValue = 0;
+                masterBedroomVisitValue = 0;
+                studyVisitValue = 0;
+            }
+        }
+        #endregion
+
+        public bool IsAudioPlaying()
+        {
+            if (audioPlaying == false)
+            {
+                return false;
+            }
+            else
+            {
+                return true;
+            }
+        }
+    }
+    #endregion
+
+    #region Display Class
+    public class Display
+    {
+        public Vector2 onScreenCurrentRoom = new Vector2(350, 50);
+
+        public Vector2 onScreenOption1;
+        public Vector2 onScreenOption2;
+        public Vector2 onScreenOption3;
+
+        public Vector2 onScreenNorth = new Vector2(350, 200);
+        public Vector2 onScreenSouth = new Vector2(350, 400);
+        public Vector2 onScreenEast = new Vector2(500, 300);
+        public Vector2 onScreenWest = new Vector2(200, 300);        
+
+        //public Vector2 offScreen = new Vector2 (0,-30);
+
+        public string currentRoomText;
+
+        public string northText;
+        public string southText;
+        public string eastText;
+        public string westText;
+
+        public void CurrentRoomTextOnScreen(string currentRoom)
+        {
+            currentRoomText = currentRoom;
+        }
+
+        public void MoveDirectionTextOnScreen(string north, string south, string east, string west)
+        {
+            northText = north;
+            southText = south;
+            eastText = east;
+            westText = west;
+        }
+    }
+    #endregion
+}
