@@ -1,3 +1,8 @@
+/*The main game .CS file for The Gardens Demo.
+Aside from the Program.cs file that acts as the game's entry point,
+this main game file contains all the classes and functions for the actual demo.
+*/
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
